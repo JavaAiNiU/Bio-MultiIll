@@ -10,9 +10,9 @@ def apply_wb(org_img,pred,pred_type= "illumination"):
     apply wb into original image (3-channel RGB image).
     """
 
-        # pred[:, :1, ...] 是 R通道, pred[:, 1:, ...] 是 B通道
+        
     ones_pred = torch.ones_like(pred[:, :1, :, :])
-    # 注意：这里千万不能加 .detach()，否则无法训练
+    
     pred = torch.cat([pred[:, :1, :, :], ones_pred, pred[:, 1:, :, :]], dim=1)
 
     pred = torch.clamp(torch.abs(pred), min=1e-6)
@@ -38,7 +38,7 @@ def calculate_angular_error(pred, gt, tensor_type, camera=None, mask=None):
         torch.Tensor: shape (B,), 包含该 batch 中每张图的平均 AE。
     """
     # -----------------------------------------------------------
-    # 1. 范围截断 (Clamping)
+    
     # -----------------------------------------------------------
     if tensor_type == "rgb":
         if camera == 'galaxy':
@@ -49,9 +49,9 @@ def calculate_angular_error(pred, gt, tensor_type, camera=None, mask=None):
             gt = torch.clamp(gt, 0, 16383)
 
     # -----------------------------------------------------------
-    # 2. 通道补全 (2ch -> 3ch)
+    
     # -----------------------------------------------------------
-    # 假设输入是 [B, 2, H, W] (R, B)，中间补 G=1
+    
     ones_pred = torch.ones_like(pred[:, :1, :, :])
     pred = torch.cat([pred[:, :1, :, :], ones_pred, pred[:, 1:, :, :]], dim=1)
 
@@ -59,39 +59,39 @@ def calculate_angular_error(pred, gt, tensor_type, camera=None, mask=None):
     gt = torch.cat([gt[:, :1, :, :], ones_gt, gt[:, 1:, :, :]], dim=1)
 
     # -----------------------------------------------------------
-    # 3. 计算角度图 (Pixel-wise)
+    
     # -----------------------------------------------------------
-    # dim=1 是通道维度，计算后 shape 为 [B, H, W]
+    
     cos_similarity = F.cosine_similarity(pred + 1e-4, gt + 1e-4, dim=1)
     cos_similarity = torch.clamp(cos_similarity, -1.0, 1.0)
     rad = torch.acos(cos_similarity)
     ang_error_map = torch.rad2deg(rad) # [B, H, W]
 
     # -----------------------------------------------------------
-    # 4. 基于 Mask 计算每张图的平均误差 (Image-wise Mean)
+    
     # -----------------------------------------------------------
     if mask is not None:
         # mask shape: [B, 1, H, W] -> squeeze -> [B, H, W]
         mask = mask.squeeze(1)
         
-        # 为了保持 batch 维度，我们不能使用 boolean indexing (mask!=0)，那会展平所有数据
-        # 我们需要分别计算每张图的总误差和有效像素数
         
-        # 只保留 mask 区域的误差 (无效区域置0)
+        
+        
+        
         masked_error = ang_error_map * mask 
         
-        # 在空间维度 (H, W) 上求和 -> [B]
+        
         error_sum = masked_error.sum(dim=(1, 2))
         pixel_count = mask.sum(dim=(1, 2))
         
-        # 计算每张图的平均值，防止除以0
+        
         mean_angular_error = error_sum / (pixel_count + 1e-8)
         
     else:
-        # 如果没有 mask，直接在 (H, W) 维度求平均 -> [B]
+        
         mean_angular_error = ang_error_map.mean(dim=(1, 2))
 
-    # 返回 shape (B,)，这样 torch.cat 就可以拼接了
+    
     return mean_angular_error
 
 
@@ -151,35 +151,35 @@ def process_files(directory_path):
     返回:
     list: 包含每个文件的loss、文件名和epoch的列表
     """
-    # 获取目录中的所有文件
+    
     files = [f for f in os.listdir(directory_path) if f.endswith('.pth')]
 
-    # 初始化列表，用于存储每个文件的信息
+    
     file_info_list = []
 
-    # 遍历文件，划分文件名并提取loss和轮数
+    
     for file_name in files:
-        # 使用split方法从文件名中提取loss和轮数
+        
         parts = file_name.split('_')
         if len(parts) >= 3 and parts[-1].endswith('.pth'):
             loss = parts[-2]
             epoch = parts[-1].split('.')[0]
 
-            # 存储文件的信息到列表中
+            
             file_info_list.append({
                 '文件名': file_name,
                 'Loss': loss,
                 'epoch': epoch
             })
 
-    # 如果没有找到符合条件的文件，则打印提示信息
+    
     if not file_info_list:
         print("目录中没有符合条件的.pth文件。")
 
     return file_info_list
 
 if __name__ == '__main__':
-    # 测试函数
+    
     directory_path = "last_model/"
     file_info_list = process_files(directory_path)
     model_name = file_info_list['文件名']

@@ -9,7 +9,7 @@ from torchvision import transforms
 from tqdm import tqdm
 import numpy as np
 
-# 假设这些模块你已经保存为对应的 .py 文件
+
 from model.NetWork3galaxy import DUNF 
 from Losses.color_loss import ColorHistogramKLLoss 
 from Losses.AntLoss import AngularErrorLoss
@@ -50,7 +50,7 @@ def compute_ae_metrics(errors_tensor):
     }
 
 # ==========================================
-# 辅助函数：计算参数量
+
 # ==========================================
 def count_model_params(model, unit="M"):
     total_params = sum(p.numel() for p in model.parameters())
@@ -59,7 +59,7 @@ def count_model_params(model, unit="M"):
     else: return total_params
 
 # ==========================================
-# 辅助函数：处理断点恢复
+
 # ==========================================
 def process_files(directory):
     files_info = []
@@ -68,7 +68,7 @@ def process_files(directory):
     for filename in os.listdir(directory):
         if filename.endswith(".pth"):
             try:
-                # 假设格式: best_ae_4.12_50.pth
+                
                 parts = filename.replace('.pth', '').split('_')
                 metric = float(parts[-2])
                 epoch = int(parts[-1])
@@ -78,7 +78,7 @@ def process_files(directory):
     files_info.sort(key=lambda x: x['epoch'], reverse=True)
     return files_info
 
-# ===== 新增：封装通用的测试集评估函数 (核心，两处调用都用这个函数) =====
+
 def eval_on_test_set(model, test_loader, criterion_L1, device, epoch, current_lr):
     model.eval()
     test_loss_accum = 0.0
@@ -93,22 +93,22 @@ def eval_on_test_set(model, test_loader, criterion_L1, device, epoch, current_lr
             
             preds_illum, _, _ = model(input_tensor)
             
-            # 计算测试集Loss
+            
             loss = criterion_L1(preds_illum, target_illum)
             test_loss_accum += loss.item()
             
-            # 计算测试集AE指标
+            
             batch_aes = calculate_angular_error(preds_illum, target_illum, tensor_type="illumination", mask=mask)
             test_ae_all.append(batch_aes)
             
             test_steps += 1
     
-    # 计算测试集整体指标
+    
     test_loss = test_loss_accum / test_steps
     test_ae_tensor = torch.cat(test_ae_all, dim=0)
     test_ae_stats = compute_ae_metrics(test_ae_tensor)
     
-    # 打印测试集详细指标
+    
     test_log_msg = (f"Epoch {epoch} Test - Loss: {test_loss:.4f} | "
                     f"Mean AE: {test_ae_stats['mean']:.4f} | "
                     f"Median: {test_ae_stats['median']:.4f} | "
@@ -121,10 +121,10 @@ def eval_on_test_set(model, test_loader, criterion_L1, device, epoch, current_lr
     return test_loss, test_ae_stats
 
 # ==========================================
-# 训练主逻辑
+
 # ==========================================
 def train_and_evaluate(args):
-    # 1. 目录设置
+    
     alpha, beta = 1, 3
     weight_dir = os.path.join(args.result_dir, f'alpha_{alpha}_beta_{beta}')
     os.makedirs(weight_dir, exist_ok=True)
@@ -134,11 +134,11 @@ def train_and_evaluate(args):
         os.makedirs(os.path.join(weight_dir, d), exist_ok=True)
 
 
-    # 2. 数据集加载 (保持不变)
+    
     transform = transforms.Compose([RandomRotateFlip(split=args.split), ToTensor()])
     random_color_aug = None
     if args.illum_augmentation == 'yes':
-        # print(f"🌈 启用随机光照增强 (Sat:{args.sat_min}-{args.sat_max})")
+        
         # random_color_aug = RandomColor(
         #     sat_min=args.sat_min, sat_max=args.sat_max,
         #     val_min=args.val_min, val_max=args.val_max,
@@ -180,7 +180,7 @@ def train_and_evaluate(args):
     test_loader = DataLoader(testdataset, batch_size=1, shuffle=False, 
                              num_workers=args.num_workers, pin_memory=True, worker_init_fn=worker_init_fn)
 
-    # 3. 模型与优化器 (保持不变)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = DUNF().to(device)
     print(f"模型参数量: {count_model_params(model):.2f} M")
@@ -199,19 +199,19 @@ def train_and_evaluate(args):
     )
 
     # ============================================================
-    # 4. 断点恢复逻辑 (核心修改部分) 
+    
     # ============================================================
     start_epoch = 1
     best_val_ae = float('inf') 
     best_test_ae = float('inf')
 
-    # 定义路径
+    
     save_lastmodel = os.path.join(weight_dir, 'last_model')
     save_best_val_dir = os.path.join(weight_dir, 'best_val_ae_model')
     save_best_test_dir = os.path.join(weight_dir, 'best_test_ae_model')
 
     if args.resume:
-        # A. 恢复模型权重和 Epoch
+        
         last_files = process_files(save_lastmodel)
         if len(last_files) > 0:
             latest = last_files[0]
@@ -224,15 +224,15 @@ def train_and_evaluate(args):
             
             start_epoch = latest['epoch'] + 1
 
-            # B. 恢复历史最佳 Val AE
-            # 你的 process_files 函数已经解析了 'Metric' (即 AE 值)
+            
+            
             val_files = process_files(save_best_val_dir)
             if len(val_files) > 0:
-                # 理论上文件夹里应该只有一个best模型，但为了安全，取所有文件Metric的最小值
+                
                 best_val_ae = min([f['Metric'] for f in val_files])
                 print(f"📈 已恢复历史最佳 Val AE: {best_val_ae:.4f}")
             
-            # C. 恢复历史最佳 Test AE
+            
             test_files = process_files(save_best_test_dir)
             if len(test_files) > 0:
                 best_test_ae = min([f['Metric'] for f in test_files])
@@ -241,7 +241,7 @@ def train_and_evaluate(args):
         else:
             print("⚠️ 未找到 Last Checkpoint，从头开始训练")
 
-    # 5. 训练循环
+    
     print(f"🏁 开始训练 (Epoch {start_epoch} -> {args.num_epoch})")
     eps = 1e-8
     for epoch in range(start_epoch, args.num_epoch + 1):
@@ -258,10 +258,10 @@ def train_and_evaluate(args):
             target_rgb = batch['gt_rgb'].to(device, non_blocking=True)
             mask = batch['mask'].to(device, non_blocking=True)
 
-            # 前向传播
+            
             preds_illum, aux_loss, _ = model(input_tensor)
 
-          # Loss 计算
+          
             loss_l1 = criterion_L1(preds_illum*mask, target_illum*mask)
             loss_ang = criterion_Angular(preds_illum, target_illum, mask)
 
@@ -273,7 +273,7 @@ def train_and_evaluate(args):
 
             total_loss = 0.3*loss_l1+0.7*loss_ang # + loss_col  #+ loss_rgb_l1 #+ 0.005*loss_ang# + 0*aux_loss  
 
-            # 反向传播
+            
             optimizer.zero_grad()
             total_loss.backward()
             optimizer.step()
@@ -289,7 +289,7 @@ def train_and_evaluate(args):
             
             pbar.set_postfix(loss=total_loss.item(),LossL1 =loss_l1.item(),Loss_col=loss_col.item(),loss_rgb = loss_rgb_l1.item(),Loss_ang=loss_ang.item())#, ae=batch_ae.mean().item(),Loss_aux=aux_loss.item()
 
-        # 训练 Epoch 总结
+        
         for k in train_metrics: train_metrics[k] /= steps
         epoch_time = time.time() - epoch_start
         
@@ -297,12 +297,12 @@ def train_and_evaluate(args):
         print(log_msg) 
 
 
-        # === 保存最新模型 (Last) ===
+        
         last_path = os.path.join(save_lastmodel, f"model_last_{train_metrics['loss']:.4f}_{epoch}.pth")
         for f in os.listdir(save_lastmodel): os.remove(os.path.join(save_lastmodel, f))
         torch.save(model.state_dict(), last_path)
 
-        # 6. 验证循环 (每2个epoch)
+        
         if epoch % 2 == 0:
             model.eval()
             val_loss_accum = 0.0
@@ -332,21 +332,21 @@ def train_and_evaluate(args):
             
             val_log_msg = (f"Epoch {epoch} Val - Mean AE: {ae_stats['mean']:.4f} | Best Val: {best_val_ae:.4f}")
             print(f"\n📊 {val_log_msg}\n")
-            # === 保存最佳 Val AE 模型 ===
+            
             if ae_stats['mean'] < best_val_ae:
                 best_val_ae = ae_stats['mean']
                 save_path = os.path.join(save_best_val_dir, f"best_val_ae_{best_val_ae:.4f}_{epoch}.pth")
-                # 清空旧的最佳模型
+                
                 for f in os.listdir(save_best_val_dir): os.remove(os.path.join(save_best_val_dir, f))
                 torch.save(model.state_dict(), save_path)
                 print(f"🔥 New Best Val AE: {best_val_ae:.4f}° | 评估测试集...")
                 
 
-        # 强制评估测试集
+        
         if epoch % 1 == 0:
             print(f"\n🔍 Epoch {epoch} 强制评估测试集...")
             test_loss, test_ae_stats = eval_on_test_set(model, test_loader, criterion_L1, device, epoch, current_lr)
-                            # 保存最优测试集AE模型
+                            
             if test_ae_stats['mean'] < best_test_ae:
                 best_test_ae = test_ae_stats['mean']
                 test_save_path = os.path.join(weight_dir, 'best_test_ae_model', f"best_test_ae_{best_test_ae:.4f}_{epoch}.pth")
@@ -361,8 +361,8 @@ if __name__ == "__main__":
     parser.add_argument('--result_dir', type=str, default='./result/LSMI/AE_sony_mixed')
     parser.add_argument('--split_json_path', type=str, default=None)
     parser.add_argument('--split', type=str, default='train')
-    parser.add_argument('--illum_mode', type=str, default='mixed')#光源混合模式。决定加载哪些类型的图片后缀：● single: 仅加载单光源 (_1)。● multi: 仅加载多光源融合 (_12, _13, _123)。● mixed: 混合加载所有 (_1 + 多光源)。
-    parser.add_argument('--image_pool', type=int, nargs='+', default=[1,2,3])#允许的光源数量池。配合 illum_mode 使用，筛选包含几个光源的图：● 1: 单光源● 2: 双光源● 3: 三光源
+    parser.add_argument('--illum_mode', type=str, default='mixed')
+    parser.add_argument('--image_pool', type=int, nargs='+', default=[1,2,3])
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=8)
 
@@ -370,7 +370,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_epoch', type=int, default=4001)
     parser.add_argument('--resume', action='store_true', default=True, help='是否从上次训练断点恢复')
 
-    # === 新增参数 ===
+    
     parser.add_argument('--gpu_id', type=str, default='1', help='指定使用的GPU ID，例如 0 或 0,1')
 
     parser.add_argument('--illum_augmentation', type=str, default='yes', help='是否启用光照增强')
@@ -389,6 +389,8 @@ if __name__ == "__main__":
     
     train_and_evaluate(args)
 
+
+
 # illum_mode,image_pool,    实际加载的数据后缀   ,说明
 # single,    [1]            ,_1                 ,标准单光源模式
 # single,    "[1, 2, 3]"    ,_1                 ,因为 single 限制了只有 _1，即便池子里有 2 和 3 也不会加载
@@ -396,3 +398,6 @@ if __name__ == "__main__":
 # multi,     "[1, 2]",      _12                 ,multi 排除了 _1，image_pool 排除了 _123
 # mixed,     "[1, 2, 3]"   ,"_1, _12, _13, _123",全量模式
 # mixed,     "[1, 2]","    _1, _12, _13"        ,加载单光源和双光源，排除三光源
+
+
+

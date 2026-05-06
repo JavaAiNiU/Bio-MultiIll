@@ -7,7 +7,7 @@ import colorsys
 from torch.utils import data
 
 # ==========================================
-# 1. 辅助函数
+
 # ==========================================
 def mix_chroma(mixmap, chroma_list, illum_count):
     """
@@ -26,7 +26,7 @@ def worker_init_fn(worker_id):
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 # ==========================================
-# 2. 修复后的 RandomColor (关键！)
+
 # ==========================================
 class RandomColor():
     def __init__(self, sat_min, sat_max, val_min, val_max, hue_threshold):
@@ -54,15 +54,15 @@ class RandomColor():
                 saturation = np.random.uniform(self.sat_min, self.sat_max)
                 value = np.random.uniform(self.val_min, self.val_max)
                 
-                # 获取 RGB
+                
                 chroma_rgb = np.array(self.hsv2rgb(hue, saturation, value), dtype='float32')
                 
-                # 【核心修复】：防止 G=0 导致 Inf/NaN
-                # 如果 G < 1e-5 (接近0)，则加一个极小值
+                
+                
                 if chroma_rgb[1] < 1e-5:
                     chroma_rgb[1] = 1e-5
                 
-                # 安全的归一化
+                
                 chroma_rgb /= chroma_rgb[1]
 
                 if self.threshold_test(hue_list, hue):
@@ -70,7 +70,7 @@ class RandomColor():
                     ret_chroma[int(i)-1] = chroma_rgb
                     break
         return np.array(ret_chroma)
-# ===================== 新增：随机旋转+随机翻转 数据增强类 =====================
+
 
 class RandomRotateFlip:
     """
@@ -83,34 +83,34 @@ class RandomRotateFlip:
     def __init__(self, split):
         self.split = split
         self.aug_keys = ["input", "input_rgb", "gt", "gt_rgb", "gt_illum", "mask", "mixmap"]
-        self.rot_min = -30  # 最小旋转角度
-        self.rot_max = 30   # 最大旋转角度
+        self.rot_min = -30  
+        self.rot_max = 30   
 
     def __call__(self, ret_dict):
-        # 仅在训练模式执行增强，验证/测试集直接返回原数据
+        
         if self.split != 'train' and np.random.random() > 0.7  :
             return ret_dict
         # print('RandomRotateFlip Augmentation Applied')
-        # ✅ 关键：只生成一次随机参数，所有张量共用！保证同步增强，绝不错位
-        random_angle = np.random.uniform(self.rot_min, self.rot_max)  # 随机旋转角度
-        flip_horizontal = np.random.random() > 0.5                    # 50%概率水平翻转
-        flip_vertical = np.random.random() > 0.5                      # 50%概率垂直翻转
-        # 遍历所有需要增强的张量，执行同步变换
+        
+        random_angle = np.random.uniform(self.rot_min, self.rot_max)  
+        flip_horizontal = np.random.random() > 0.5                    
+        flip_vertical = np.random.random() > 0.5                      
+        
         for key in self.aug_keys:
             if key not in ret_dict:
                 continue
             data = ret_dict[key]
             if not isinstance(data, np.ndarray):
                 continue
-            # 步骤1：执行随机旋转 (保持原图尺寸，边缘补0，与原图一致)
+            
             data = self.rotate_np(data, random_angle)
-            # 步骤2：执行随机水平翻转
+            
             if flip_horizontal:
                 data = np.flip(data, axis=1)
-            # 步骤3：执行随机垂直翻转
+            
             if flip_vertical:
                 data = np.flip(data, axis=0)
-            # 更新增强后的数据
+            
             ret_dict[key] = data
         return ret_dict
 
@@ -118,23 +118,23 @@ class RandomRotateFlip:
         """numpy数组旋转封装，适配任意通道数 (H,W,C)"""
         h, w = img_np.shape[:2]
         center = (w / 2, h / 2)
-        # 获取旋转矩阵
+        
         M = cv2.getRotationMatrix2D(center, angle, 1.0)
-        # 执行旋转，边缘填充0，保持尺寸不变
+        
         rotated = cv2.warpAffine(
             img_np, M, (w, h),
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=0.0
         )
-        # 修复通道维度：单通道时 warpAffine会丢掉C维度，需要补回
+        
         if len(img_np.shape) == 3 and len(rotated.shape) == 2:
             rotated = rotated[..., np.newaxis]
         return rotated
 
    
 # ==========================================
-# 3. Dataset 类 (参考逻辑版)
+
 # ==========================================
 class IllumDataset(data.Dataset):
     def __init__(
@@ -243,7 +243,7 @@ class IllumDataset(data.Dataset):
         h, w = raw_rgb.shape[:2]
         
         # 2. Load Mixmap & GT Illum
-        # 这一步对于生成 Illum Augmentation 至关重要
+        
         mixmap_valid = np.zeros((h, w, 3), dtype=np.float32)
         full_mixmap = np.zeros((h, w, 3), dtype=np.float32)
 
@@ -261,10 +261,10 @@ class IllumDataset(data.Dataset):
                 full_mixmap[..., :valid_c] = mixmap_data[..., :valid_c]
                 full_mixmap[full_mixmap == self.uncalculable] = 0.0
                 
-                # 准备用于 mix_chroma 的 map (将 uncalculable 置0)
+                
                 mixmap_valid[..., :valid_c] = np.where(mixmap_data[..., :valid_c] == self.uncalculable, 0, mixmap_data[..., :valid_c])
 
-        # 加载原始 GT Illum (用于验证或非增强时使用)
+        
         illum_path = os.path.join(data_dir, f"{fname_no_ext}_illum.npy")
         if os.path.exists(illum_path):
             gt_illum_full = np.load(illum_path).astype(np.float32)
@@ -276,22 +276,22 @@ class IllumDataset(data.Dataset):
             gt_illum_full = np.zeros((h, w, 3), dtype=np.float32)
 
 
-        # # 3. 数据增强 (核心逻辑：对齐 LSMI 参考代码)
+        
         # if self.split == 'train' and self.illum_augmentation is not None:
-        #      # 生成增强颜色 (augment_chroma)
-        #      # 这通常是一个倍率因子，比如 [1.2, 0.8, 1.1]
+        
+        
         #     augment_chroma = self.illum_augmentation(illum_ids)
             
-        #     # 生成 Tint Map (滤镜图)
+        
         #     tint_map = mix_chroma(mixmap_valid, augment_chroma, illum_ids)
             
-        #     # === 参考代码逻辑 ===
+        
         #     # Input_New = Input_Old * Tint
         #     raw_rgb = raw_rgb * tint_map
             
         #     # GT_New = GT_Old * Tint
-        #     # 注意：参考代码其实是更新了 meta 里的颜色然后重新 mix_chroma，
-        #     # 等效于直接把 GT Illum 图乘以 Tint Map
+        
+        
         #     gt_illum_full = gt_illum_full * tint_map
 
 

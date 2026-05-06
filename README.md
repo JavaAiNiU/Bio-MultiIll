@@ -16,5 +16,6 @@ Ensure the following files are generated:
 - **GT Illuminant Maps:** `.npy` format
 - **Illuminant Mixture Weights:** `.npy` format
 
-**⚠️ Important Preprocessing Instruction:**
+**PreTrained Model:**
+
 The pre-trained models will be made publicly available upon paper acceptance.
